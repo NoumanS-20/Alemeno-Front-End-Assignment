@@ -35,14 +35,15 @@ export default function ScannerScreen({ onComplete }) {
 
   const device = useCameraDevice('back');
 
-  // Request a high-resolution photo/video format. The assignment
-  // requires the camera feed to be 2000x2000 to 3000x3000 px. We
-  // pick the format whose photo dimensions sit in that range and
-  // whose aspect ratio is closest to square (so the central
-  // reticle area has plenty of pixels to work with).
+  // Request a high-resolution video/frame-processor format. The
+  // assignment requires the live camera feed to be 2000x2000 to
+  // 3000x3000 px, so we target 2400x2400 and let Vision Camera pick
+  // the closest device-supported stream if an exact square format is
+  // unavailable.
   const format = useCameraFormat(device, [
+    { videoResolution: { width: 2400, height: 2400 } },
+    { videoAspectRatio: 1 },
     { photoResolution: { width: 2400, height: 2400 } },
-    { videoResolution: { width: 1920, height: 1080 } },
     { fps: 30 },
   ]);
 
@@ -55,8 +56,8 @@ export default function ScannerScreen({ onComplete }) {
   }, []);
 
   const handleMarkerFound = useCallback((b64, ts) => {
-    if (collectedRef.current.length >= TARGET_COUNT) return;
-    if (ts - lastAcceptRef.current < MIN_GAP_MS) return;
+    if (collectedRef.current.length >= TARGET_COUNT) {return;}
+    if (ts - lastAcceptRef.current < MIN_GAP_MS) {return;}
     lastAcceptRef.current = ts;
 
     const next = [
@@ -75,8 +76,8 @@ export default function ScannerScreen({ onComplete }) {
   const { frameProcessor } = useMarkerFrameProcessor(handleMarkerFound);
 
   const reticleStatusText = useMemo(() => {
-    if (count === 0) return 'Point the camera at the marker';
-    if (count < TARGET_COUNT) return `Scanning… ${count} / ${TARGET_COUNT}`;
+    if (count === 0) {return 'Point the camera at the marker';}
+    if (count < TARGET_COUNT) {return `Scanning… ${count} / ${TARGET_COUNT}`;}
     return 'Done!';
   }, [count]);
 

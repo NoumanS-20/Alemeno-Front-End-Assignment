@@ -1,0 +1,41 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# React Native
+.expo/
+.expo-shared/
+.metro-health-check*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/captures/
+*.iml
+.gradle/
+
+# iOS (not used here but standard)
+ios/Pods/
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Misc
+*.log
+.env
+.env.local

@@ -48,7 +48,7 @@ export function useMarkerFrameProcessor(onMarkerFound) {
           dispatchFound(patchB64, Date.now());
         }
       } catch (e) {
-        // A transient CV failure should not stop the camera stream.
+        // Transient CV failure — drop the frame, keep the camera running.
       }
     },
     [dispatchFound, resize],

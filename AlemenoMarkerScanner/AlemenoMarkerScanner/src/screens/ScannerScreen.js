@@ -25,7 +25,10 @@ import { Camera, useCameraDevice, useCameraFormat } from 'react-native-vision-ca
 import { useMarkerFrameProcessor } from '../detection/useMarkerFrameProcessor';
 
 const TARGET_COUNT = 20;
-const MIN_GAP_MS = 250; // minimum interval between accepted detections
+// Minimum interval between unique accepted detections. With this set
+// to 80 ms, capturing all 20 markers takes ~1.6 s + camera warm-up,
+// well inside the assignment's 3000 ms scan-to-result target.
+const MIN_GAP_MS = 80;
 
 export default function ScannerScreen({ onComplete }) {
   const [hasPermission, setHasPermission] = useState(null);

@@ -80,24 +80,29 @@ export function detectMarker(OpenCV, frameMat, frameRows, frameCols) {
     const area = (areaResult && areaResult.value !== undefined) ? areaResult.value : areaResult;
     if (area < MIN_MARKER_PIXEL_SIZE * MIN_MARKER_PIXEL_SIZE) { continue; }
 
-    const periResult = OpenCV.invoke('arcLength', contour, true);
-    const perimeter = (periResult && periResult.value !== undefined) ? periResult.value : periResult;
-    const approx = OpenCV.createObject(ObjectType.PointVector);
-    OpenCV.invoke(
-      'approxPolyDP',
-      contour,
-      approx,
-      POLY_APPROX_EPSILON * perimeter,
-      true,
-    );
+    // Convex hull first: camera frames captured from a screen have
+    // jagged contour edges due to subpixel rendering + moiré, which
+    // makes a raw approxPolyDP land on tiny zigzag corners instead of
+    // the 4 frame corners. The hull strips those concave noise points
+    // out so a small epsilon then collapses cleanly to 4 corners.
+    const hull = OpenCV.createObject(ObjectType.Mat, 0, 0, DataTypes.CV_32SC2);
+    OpenCV.invoke('convexHull', contour, hull);
+    const hullPeriResult = OpenCV.invoke('arcLength', hull, true);
+    const perimeter = (hullPeriResult && hullPeriResult.value !== undefined) ? hullPeriResult.value : hullPeriResult;
 
-    const approxJS = OpenCV.toJSValue(approx);
-    const approxPoints = approxJS && approxJS.array;
-    if (!approxPoints || approxPoints.length !== 4) { continue; }
-
-    const isConvexResult = OpenCV.invoke('isContourConvex', approx);
-    const isConvex = (isConvexResult && isConvexResult.value !== undefined) ? isConvexResult.value : isConvexResult;
-    if (!isConvex) { continue; }
+    let approxPoints = null;
+    const epsilonScales = [0.02, 0.03, 0.04, 0.05, 0.06, 0.08];
+    for (let e = 0; e < epsilonScales.length; e++) {
+      const a = OpenCV.createObject(ObjectType.PointVector);
+      OpenCV.invoke('approxPolyDP', hull, a, epsilonScales[e] * perimeter, true);
+      const aJS = OpenCV.toJSValue(a);
+      const pts = aJS && aJS.array;
+      if (pts && pts.length === 4) {
+        approxPoints = pts;
+        break;
+      }
+    }
+    if (!approxPoints) { continue; }
 
     // Order corners (TL, TR, BR, BL)
     let tl = approxPoints[0], tr = approxPoints[0], br = approxPoints[0], bl = approxPoints[0];
@@ -181,14 +186,23 @@ export function detectMarker(OpenCV, frameMat, frameRows, frameCols) {
     const meanL = (OpenCV.toJSValue(OpenCV.invoke('mean', cropLeft)).a || 0);
     const meanR = (OpenCV.toJSValue(OpenCV.invoke('mean', cropRight)).a || 0);
     const borderRatio = (meanTop + meanBot + meanL + meanR) / 4 / 255;
-    if (borderRatio < 0.75) { continue; }
+    // Loose threshold: approxPolyDP corners often land slightly inside
+    // the frame edge, so the sampled ring picks up some interior white
+    // pixels and the ratio drops. Anything well above 0.5 still implies
+    // a dominant outer black frame; lower values almost always mean we
+    // got a non-marker quadrilateral.
+    if (borderRatio < 0.55) { continue; }
 
     // Center ink ratio
     const cm = Math.round(N * 0.25);
     const cropCenter = OpenCV.createObject(ObjectType.Mat, N - 2 * cm, N - 2 * cm, DataTypes.CV_8UC1);
     OpenCV.invoke('crop', wBin, cropCenter, OpenCV.createObject(ObjectType.Rect, cm, cm, N - 2 * cm, N - 2 * cm));
     const centerRatio = (OpenCV.toJSValue(OpenCV.invoke('mean', cropCenter)).a || 0) / 255;
-    if (centerRatio > 0.70) { continue; }
+    // Reject only if the center is overwhelmingly dark (would indicate
+    // a solid filled square, not a Marker 1). The actual marker test
+    // images include content-rich centers (animal faces with outlines),
+    // which can register up to ~0.4-0.5 ink ratio under thresholding.
+    if (centerRatio > 0.85) { continue; }
 
     // Find anchor blob inside the warped binary
     const anchorContours = OpenCV.createObject(ObjectType.MatVector);
@@ -238,9 +252,13 @@ export function detectMarker(OpenCV, frameMat, frameRows, frameCols) {
 
     if (anchorMatches !== 1 || disqualifying > 0) { continue; }
 
-    let rotationSteps = 3;
+    // Pick the rotation that brings the anchor to the canonical TL.
+    // cv::ROTATE_90_CLOCKWISE moves what was at BL → TL, so anchor at BL needs CW.
+    // cv::ROTATE_180 moves BR → TL.
+    // cv::ROTATE_90_COUNTERCLOCKWISE moves TR → TL.
+    let rotationSteps = 1; // default: BL → TL (ROTATE_90_CW)
     if (anchorTop && anchorLeft) { rotationSteps = 0; }
-    else if (anchorTop && anchorRight) { rotationSteps = 1; }
+    else if (anchorTop && anchorRight) { rotationSteps = 3; }
     else if (anchorBottom && anchorRight) { rotationSteps = 2; }
 
     const expectedAnchorRatio = 20 / 140;

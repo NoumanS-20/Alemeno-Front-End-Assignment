@@ -54,7 +54,12 @@ export const MIN_MARKER_PIXEL_SIZE = 60;
 // When testing whether a candidate's outer contour is "square enough",
 // the ratio of (longer side) / (shorter side) of its minAreaRect
 // must be below this threshold. 1.0 is a perfect square.
-export const SQUARENESS_TOLERANCE = 1.25;
+// Allow up to ~2.5x aspect ratio so that markers seen at significant
+// perspective angle (e.g., camera held at 30° off-axis to the marker)
+// still pass. The perspective warp downstream restores the square,
+// so a generous tolerance here only affects which candidates we
+// consider — not the final extracted marker quality.
+export const SQUARENESS_TOLERANCE = 2.5;
 
 // Polygon approximation epsilon as a fraction of perimeter.
 // Standard value for finding 4-corner shapes.
